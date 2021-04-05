@@ -1,0 +1,73 @@
+//@version=4
+//
+// Coefficient of variation GME ‰
+//
+// Gray area: Regional price variance of GME
+// Light gray thick line: NYSE:GME deviation from global mean
+//
+// 1. Select a chart 24-hour ticker like FX_IDC:USDEUR
+// 2. Select a timescale (5 min, 15 min, ...)
+// 3. Monitor the regional price variance
+//
+// Exchanges included: NYSE, XETR, BMV, FWB, SWB, BITTREX, FTX
+// Currency conversion: Forex
+//
+// Adapted from Detecting the great short squeeze on Volkswagen
+// https://www.sciencedirect.com/science/article/pii/S0927538X16300075
+//
+study("CV_VWAP", precision=1)
+usdeur = input(title="usdeur", type=input.symbol, defval="FX_IDC:USDEUR")
+mxneur = input(title="mxneur", type=input.symbol, defval="FX_IDC:MXNEUR")
+symbol1 = input(title="symbol1 (EUR)", type=input.symbol, defval="FWB:GS2C")
+symbol2 = input(title="symbol2 (EUR)", type=input.symbol, defval="SWB:GS2C")
+symbol3 = input(title="symbol3 (EUR)", type=input.symbol, defval="XETR:GS2C")
+symbol4 = input(title="symbol4 (USD)", type=input.symbol, defval="NYSE:GME")
+symbol5 = input(title="symbol5 (USD)", type=input.symbol, defval="BITTREX:GMEUSD")
+symbol6 = input(title="symbol6 (USD)", type=input.symbol, defval="FTX:GMEUSD")
+symbol7 = input(title="symbol7 (MXN)", type=input.symbol, defval="BMV:GME")
+vwapusdeur = security(usdeur, timeframe.period, vwap)
+vwapmxneur = security(mxneur, timeframe.period, vwap)
+vwap1 = security(symbol1, timeframe.period, vwap)
+vwap2 = security(symbol2, timeframe.period, vwap)
+vwap3 = security(symbol3, timeframe.period, vwap)
+vwap4 = security(symbol4, timeframe.period, vwap) * vwapusdeur
+vwap5 = security(symbol5, timeframe.period, vwap) * vwapusdeur
+vwap6 = security(symbol6, timeframe.period, vwap) * vwapusdeur
+vwap7 = security(symbol7, timeframe.period, vwap) * vwapmxneur
+
+v3start = 1610020800000
+v5start = 1611745200000
+v6start = 1611797400000
+
+mysum(v1, v2, v3, v4, v5, v6, v7) =>
+    v1 + v2 + (time < v3start? 0 : v3) + v4 + (time < v5start? 0 : v5) + (time < v6start? 0 : v6) + v7
+
+mycount(v1, v2, v3, v4, v5, v6, v7) =>
+    4 + (time < v3start? 0 : 1) + (time < v5start? 0 : 1) + (time < v6start? 0 : 1)
+
+mystdev(m, c, v1, v2, v3, v4, v5, v6, v7) =>
+    sqrt((pow(v1 - m, 2) + pow(v2 - m, 2) + (time < v3start? 0: pow(v3 - m, 2)) + pow(v4 - m, 2) + (time < v5start? 0 : pow(v5 - m, 2)) + (time < v6start? 0 : pow(v6 - m, 2)) + pow(v7 - m, 2)) / c)
+
+
+sum = mysum(vwap1, vwap2, vwap3, vwap4, vwap5, vwap6, vwap7)
+count = mycount(vwap1, vwap2, vwap3, vwap4, vwap5, vwap6, vwap7)
+mean = sum / count
+stdev = mystdev(mean, count, vwap1, vwap2, vwap3, vwap4, vwap5, vwap6, vwap7)
+
+cv = 1000.0 * stdev / mean
+cv4 = 1000.0 * (vwap4 - mean) / mean
+
+plot(series=cv, color=color.gray, linewidth=3, style=plot.style_area)
+plot(series=-cv, color=color.gray, linewidth=3, style=plot.style_area)
+plot(series=cv4, color=color.silver, linewidth=3)
+plot(series=vwap1, color=color.red, linewidth=1)
+plot(series=vwap2, color=color.purple, linewidth=1)
+plot(series=(time < v3start? na : vwap3), color=color.blue, linewidth=1)
+plot(series=vwap4, color=color.teal, linewidth=1)
+plot(series=vwap5, color=color.green, linewidth=1)
+plot(series=vwap6, color=color.yellow, linewidth=1)
+plot(series=vwap7, color=color.orange, linewidth=1)
+hline(50.0, title='Amber alert', color=color.orange, linestyle=hline.style_dashed, linewidth=2)
+hline(100.0, title='Red alert', color=color.red, linestyle=hline.style_dashed, linewidth=2)
+hline(-50.0, title='Amber alert2', color=color.orange, linestyle=hline.style_dashed, linewidth=2)
+hline(-100.0, title='Red alert2', color=color.red, linestyle=hline.style_dashed, linewidth=2)
